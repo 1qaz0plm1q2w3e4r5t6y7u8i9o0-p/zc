@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>合成小游戏</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: 'Arial', sans-serif;
+    color: #fff;
+    flex-direction: column;
+    gap: 10px;
+    user-select: none;
+    overflow-x: hidden;
+    padding: 20px 0;
+  }
+  #score-board { font-size: 24px; font-weight: bold; color: #e94560; }
+  #game-container {
+    position: relative;
+    width: 360px;
+    height: 500px;
+    background: #16213e;
+    border: 4px solid #0f3460;
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: pointer;
+    touch-action: none;
+  }
+  .ball {
+    position: absolute;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: transparent !important; 
+    box-shadow: none !important;
+    text-shadow: none !important;
+    pointer-events: none;
+  }
+  #drop-line {
+    position: absolute;
+    top: 60px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: rgba(233, 69, 96, 0.5);
+    pointer-events: none;
+  }
+  #aim-line {
+    position: absolute;
+    top: 60px;
+    width: 2px;
+    height: 440px;
+    background: repeating-linear-gradient(to bottom, rgba(255,255,255,0.3) 0px, rgba(255,255,255,0.3) 6px, transparent 6px, transparent 12px);
+    pointer-events: none;
+    display: none;
+    z-index: 4;
+    transition: left 0.05s linear;
+  }
+  #top-bar {
+    position: absolute;
+    top: 8px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 12px;
+    pointer-events: none;
+    font-size: 14px;
+    color: #aaa;
+    z-index: 5;
+  }
+  #current-ball-preview { font-size: 28px; line-height: 1; }
+  #game-over {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.85);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    gap: 20px;
+    z-index: 10;
+  }
+  #game-over button {
+    padding: 12px 30px;
+    font-size: 18px;
+    background: #e94560;
+    border: none;
+    color: #fff;
+    border-radius: 8px;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: background 0.2s;
+  }
+  #game-over button:hover { background: #c73652; }
+  #game-rules {
+    width: 360px;
+    margin-top: 12px;
+    padding: 12px 16px;
+    background: #16213e;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #aaa;
+    line-height: 1.8;
+  }
+  #game-rules h3 { color: #e94560; font-size: 14px; margin-bottom: 6px; }
+  #game-rules span { color: #ffd32a; }
+
+  /* 密码锁样式 */
+  #login-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(26, 26, 46, 0.95);
+    display: flex; justify-content: center; align-items: center;
+    z-index: 100;
+  }
+  .login-box {
+    background: #16213e; padding: 40px; border-radius: 12px; 
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3); text-align: center;
+  }
+  .login-box h2 { margin-bottom: 20px; color: #e94560; }
+  .login-box input {
+    padding: 10px; font-size: 16px; border: 1px solid #0f3460; 
+    border-radius: 6px; margin-bottom: 12px; width: 220px; 
+    background: #1a1a2e; color: #fff; outline: none;
+  }
+  .login-box button {
+    padding: 10px 24px; font-size: 16px; background: #e94560; 
+    color: #fff; border: none; border-radius: 6px; cursor: pointer;
+  }
+  .login-box button:hover { background: #c73652; }
+  .login-err { color: #e94560; margin-top: 10px; display: none; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<!-- 密码锁 -->
+<div id="login-overlay">
+  <div class="login-box">
+    <h2>🔒 请输入密码</h2>
+    <input type="password" id="pwd-input" placeholder="密码" autofocus>
+    <br>
+    <button id="login-btn">进入游戏</button>
+    <div class="login-err" id="login-err">密码错误，请重试</div>
+  </div>
+</div>
+
+<div id="score-board">得分: 0</div>
+<div id="game-container">
+  <div id="drop-line"></div>
+  <div id="aim-line"></div>
+  <div id="top-bar">
+    <span id="current-ball-preview">🍒</span>
+    <span id="next-ball">下一个: 🍓</span>
+  </div>
+  <div id="game-over">
+    <div style="font-size:32px; font-weight:bold;">游戏结束!</div>
+    <div id="final-score" style="font-size:20px;"></div>
+    <button id="restart-btn">再来一局</button>
+  </div>
+</div>
+
+<div id="game-rules">
+  <h3>🎮 游戏说明</h3>
+  <div>🖱️ <span>点击</span> 容器任意位置释放水果，虚线辅助瞄准</div>
+  <div>🍒 两个 <span>相同水果</span> 碰撞会合成下一级水果</div>
+  <div>🍉 合成路线：🍒→🍓→🍊→🍋→🥝→🍎→🍉</div>
+  <div>💡 水果越大，得分越高！</div>
+  <div>⚠️ 水果堆过 <span>红线</span> 超过1秒则游戏结束</div>
+</div>
+
+<script>
+// ========== 密码逻辑 ==========
+const PASSWORD = "120210"; // ← 改成你的密码
+const loginOverlay = document.getElementById('login-overlay');
+const pwdInput = document.getElementById('pwd-input');
+const loginBtn = document.getElementById('login-btn');
+const loginErr = document.getElementById('login-err');
+
+function tryLogin() {
+  if (pwdInput.value === PASSWORD) {
+    loginOverlay.style.display = 'none';
+    initGame(); // 密码正确才启动游戏
+  } else {
+    loginErr.style.display = 'block';
+    pwdInput.value = '';
+    pwdInput.focus();
+  }
+}
+loginBtn.addEventListener('click', tryLogin);
+pwdInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
+
+// ========== 游戏逻辑 ==========
+const container = document.getElementById('game-container');
+const scoreBoard = document.getElementById('score-board');
+const currentBallPreview = document.getElementById('current-ball-preview');
+const nextBallEl = document.getElementById('next-ball');
+const gameOverEl = document.getElementById('game-over');
+const finalScoreEl = document.getElementById('final-score');
+const restartBtn = document.getElementById('restart-btn');
+const aimLine = document.getElementById('aim-line');
+
+const FRUITS = [
+  { emoji: '🍒', size: 30, score: 1 },
+  { emoji: '🍓', size: 40, score: 2 },
+  { emoji: '🍊', size: 50, score: 4 },
+  { emoji: '🍋', size: 60, score: 8 },
+  { emoji: '🥝', size: 70, score: 16 },
+  { emoji: '🍎', size: 80, score: 32 },
+  { emoji: '🍉', size: 95, score: 64 },
+];
+
+let balls = [], score = 0, currentType = 0, nextType = 0;
+let canDrop = true, gameOver = false, dangerTimer = 0;
+
+// 【修复1】调整物理参数，降低反弹，增加阻力
+const gravity = 0.4; 
+const airFriction = 0.99; // 空气阻力
+const bounce = 0.2;       // 降低反弹系数，防止一直往上弹
+
+function randomSmallFruit() { return Math.floor(Math.random() * 4); }
+
+function updatePreview() {
+  currentBallPreview.textContent = FRUITS[currentType].emoji;
+  nextBallEl.textContent = '下一个: ' + FRUITS[nextType].emoji;
+}
+
+function createBallEl(ball) {
+  const el = document.createElement('div');
+  el.className = 'ball';
+  const fruit = FRUITS[ball.type];
+  el.style.width = fruit.size + 'px';
+  el.style.height = fruit.size + 'px';
+  el.style.fontSize = (fruit.size * 0.85) + 'px';
+  el.textContent = fruit.emoji;
+  container.appendChild(el);
+  ball.el = el;
+}
+
+function updateBallPos(ball) {
+  ball.el.style.left = (ball.x - FRUITS[ball.type].size / 2) + 'px';
+  ball.el.style.top = (ball.y - FRUITS[ball.type].size / 2) + 'px';
+}
+
+function dropBall(x) {
+  if (!canDrop || gameOver) return;
+  canDrop = false;
+  aimLine.style.display = 'none';
+  const ball = { type: currentType, x: x, y: 30, vx: 0, vy: 0, merging: false, dropTime: Date.now() };
+  createBallEl(ball);
+  updateBallPos(ball);
+  balls.push(ball);
+  currentType = nextType;
+  nextType = randomSmallFruit();
+  updatePreview();
+  setTimeout(() => { canDrop = true; }, 400);
+}
+
+function updateAimLine(clientX) {
+  if (gameOver || !canDrop) { aimLine.style.display = 'none'; return; }
+  const rect = container.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const fruit = FRUITS[currentType];
+  const clampedX = Math.max(fruit.size / 2, Math.min(360 - fruit.size / 2, x));
+  aimLine.style.left = (clampedX - 1) + 'px';
+  aimLine.style.display = 'block';
+}
+
+container.addEventListener('mousemove', (e) => updateAimLine(e.clientX));
+container.addEventListener('touchmove', (e) => { e.preventDefault(); updateAimLine(e.touches[0].clientX); }, { passive: false });
+container.addEventListener('mouseleave', () => { aimLine.style.display = 'none'; });
+
+function handleDrop(e) {
+  if (gameOver) return;
+  const rect = container.getBoundingClientRect();
+  let clientX = e.type.includes('touch') ? e.changedTouches[0].clientX : e.clientX;
+  const x = clientX - rect.left;
+  const fruit = FRUITS[currentType];
+  const clampedX = Math.max(fruit.size / 2, Math.min(360 - fruit.size / 2, x));
+  dropBall(clampedX);
+}
+container.addEventListener('click', handleDrop);
+container.addEventListener('touchend', handleDrop);
+
+restartBtn.addEventListener('click', (e) => { e.stopPropagation(); restartGame(); });
+
+function checkMerge() {
+  for (let i = 0; i < balls.length; i++) {
+    if (balls[i].merging) continue;
+    for (let j = i + 1; j < balls.length; j++) {
+      if (balls[j].merging) continue;
+      const a = balls[i], b = balls[j];
+      const dx = a.x - b.x, dy = a.y - b.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const minDist = (FRUITS[a.type].size + FRUITS[b.type].size) / 2;
+      if (dist < minDist && a.type === b.type && a.type < FRUITS.length - 1) {
+        a.merging = true; b.merging = true;
+        const newType = a.type + 1;
+        const midX = (a.x + b.x) / 2, midY = (a.y + b.y) / 2;
+        a.el.remove(); b.el.remove();
+        balls = balls.filter(bb => bb !== a && bb !== b);
+        
+        // 【修复2】合成后的新水果速度强制为0，防止继承碰撞速度乱飞
+        const newBall = { type: newType, x: midX, y: midY, vx: 0, vy: 0, merging: false, dropTime: Date.now() };
+        createBallEl(newBall); updateBallPos(newBall); balls.push(newBall);
+        score += FRUITS[newType].score;
+        scoreBoard.textContent = '得分: ' + score;
+        return;
+      }
+    }
+  }
+}
+
+function checkGameOver() {
+  let isDanger = false;
+  const now = Date.now();
+  for (const ball of balls) {
+    if (ball.merging || now - ball.dropTime < 500) continue;
+    if (ball.y - FRUITS[ball.type].size / 2 < 60 && Math.abs(ball.vy) < 1) { isDanger = true; break; }
+  }
+  if (isDanger) { dangerTimer++; if (dangerTimer > 60) endGame(); } 
+  else { dangerTimer = 0; }
+}
+
+function endGame() {
+  gameOver = true;
+  finalScoreEl.textContent = '最终得分: ' + score;
+  gameOverEl.style.display = 'flex';
+  container.style.pointerEvents = 'none';
+  aimLine.style.display = 'none';
+}
+
+function restartGame() {
+  balls.forEach(b => b.el.remove());
+  balls = []; score = 0; dangerTimer = 0;
+  scoreBoard.textContent = '得分: 0';
+  currentType = randomSmallFruit(); nextType = randomSmallFruit();
+  updatePreview(); canDrop = true; gameOver = false;
+  gameOverEl.style.display = 'none';
+  container.style.pointerEvents = 'auto';
+}
+
+function updatePhysics() {
+  for (const ball of balls) {
+    if (ball.merging) continue;
+    
+    // 施加重力和空气阻力
+    ball.vy += gravity;
+    ball.vx *= airFriction;
+    
+    // 【修复3】限制最大速度，防止极端情况
+    const maxSpeed = 15;
+    ball.vx = Math.max(-maxSpeed, Math.min(maxSpeed, ball.vx));
+    ball.vy = Math.max(-maxSpeed, Math.min(maxSpeed, ball.vy));
+
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+    
+    const r = FRUITS[ball.type].size / 2;
+    
+    // 边界碰撞
+    if (ball.y + r > 500) { 
+      ball.y = 500 - r; 
+      ball.vy *= -bounce; 
+      ball.vx *= 0.9; // 落地时增加水平摩擦
+      if (Math.abs(ball.vy) < 1) ball.vy = 0; // 速度极小时直接静止
+    }
+    if (ball.x - r < 0) { ball.x = r; ball.vx *= -bounce; }
+    if (ball.x + r > 360) { ball.x = 360 - r; ball.vx *= -bounce; }
+  }
+  
+  // 球与球之间的推开逻辑
+  for (let i = 0; i < balls.length; i++) {
+    for (let j = i + 1; j < balls.length; j++) {
+      const a = balls[i], b = balls[j];
+      if (a.merging || b.merging) continue;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const minDist = (FRUITS[a.type].size + FRUITS[b.type].size) / 2;
+      if (dist < minDist && dist > 0) {
+        const overlap = (minDist - dist) / 2;
+        const nx = dx / dist, ny = dy / dist;
+        a.x -= nx * overlap; a.y -= ny * overlap;
+        b.x += nx * overlap; b.y += ny * overlap;
+      }
+    }
+  }
+}
+
+function gameLoop() {
+  if (!gameOver) {
+    updatePhysics();
+    checkMerge();
+    checkGameOver();
+    for (const ball of balls) updateBallPos(ball);
+  }
+  requestAnimationFrame(gameLoop);
+}
+
+function initGame() {
+  currentType = randomSmallFruit();
+  nextType = randomSmallFruit();
+  updatePreview();
+  gameLoop();
+}
+</script>
+</body>
+</html>
